@@ -1,0 +1,56 @@
+{
+  "development": {
+    "username": "root",
+    "password": "9823751351",
+    "database": "photography_platform",
+    "host": "127.0.0.1",
+    "port": 3306,
+    "dialect": "mysql",
+    "logging": true,
+    "pool": {
+      "max": 5,
+      "min": 0,
+      "acquire": 30000,
+      "idle": 10000
+    },
+    "timezone": "+05:30",
+    "dialectOptions": {
+      "charset": "utf8mb4",
+      "collate": "utf8mb4_unicode_ci",
+      "useUTC": false,
+      "dateStrings": true
+    },
+    "define": {
+      "charset": "utf8mb4",
+      "collate": "utf8mb4_unicode_ci",
+      "timestamps": true
+    }
+  },
+  "production": {
+    "username": "root",
+    "password": "your_mysql_password",
+    "database": "photography_platform_prod",
+    "host": "127.0.0.1",
+    "port": 3306,
+    "dialect": "mysql",
+    "logging": false,
+    "pool": {
+      "max": 20,
+      "min": 0,
+      "acquire": 30000,
+      "idle": 10000
+    },
+    "timezone": "+05:30",
+    "dialectOptions": {
+      "charset": "utf8mb4",
+      "collate": "utf8mb4_unicode_ci",
+      "useUTC": false,
+      "ssl": false
+    },
+    "define": {
+      "charset": "utf8mb4",
+      "collate": "utf8mb4_unicode_ci",
+      "timestamps": true
+    }
+  }
+}
