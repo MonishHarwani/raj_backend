@@ -3,11 +3,90 @@ const { body, validationResult } = require("express-validator");
 const { User, Post, Photo } = require("../models");
 const { authenticateToken } = require("../middleware/auth");
 const { uploadProfile } = require("../middleware/upload");
+const { Op, Sequelize } = require("sequelize");
+const { sequelize } = require("../models/User");
 const router = express.Router();
+
+// Add this route to your existing users.js
+router.get("/search", authenticateToken, async (req, res) => {
+  try {
+    // console.log("monsihj");
+    const { q } = req.query;
+    const currentUserId = req.user.id;
+
+    if (!q || q.trim().length < 2) {
+      return res.json({ users: [] });
+    }
+
+    const searchTerm = q.trim().toLowerCase();
+    const searchWords = searchTerm.split(" ").filter((word) => word.length > 0);
+
+    // Build search conditions for each word
+    const searchConditions = searchWords.map((word) => ({
+      [Op.or]: [
+        sequelize.where(
+          sequelize.fn("LOWER", sequelize.col("firstName")),
+          "LIKE",
+          `%${word}%`
+        ),
+        sequelize.where(
+          sequelize.fn("LOWER", sequelize.col("lastName")),
+          "LIKE",
+          `%${word}%`
+        ),
+        sequelize.where(
+          sequelize.fn("LOWER", sequelize.col("email")),
+          "LIKE",
+          `%${word}%`
+        ),
+      ],
+    }));
+    // return res.status(200).json({ message: searchWords });
+
+    const users = await User.findAll({
+      where: {
+        [Op.and]: [
+          { id: { [Op.ne]: currentUserId } }, // Exclude current user
+          ...searchConditions, // Include all search word conditions
+        ],
+      },
+      attributes: [
+        "id",
+        "firstName",
+        "lastName",
+        "email",
+        "profilePhoto",
+        "bio",
+      ],
+      limit: 20,
+      order: [
+        // Prioritize exact matches
+        [
+          sequelize.literal(`
+            CASE 
+              WHEN LOWER(firstName) LIKE '${searchTerm}%' THEN 1
+              WHEN LOWER(lastName) LIKE '${searchTerm}%' THEN 2
+              WHEN LOWER(CONCAT(firstName, ' ', lastName)) LIKE '${searchTerm}%' THEN 3
+              ELSE 4
+            END
+          `),
+          "ASC",
+        ],
+        ["firstName", "ASC"],
+      ],
+    });
+
+    res.json({ users });
+  } catch (error) {
+    console.error("Search users error:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
 
 // Get user profile
 router.get("/:id", async (req, res) => {
   try {
+    console.log("Inside Id");
     const user = await User.findByPk(req.params.id, {
       attributes: [
         "id",

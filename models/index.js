@@ -8,6 +8,7 @@ const Resume = require("./Resume");
 const Job = require("./Job");
 const Application = require("./Application");
 const Message = require("./Message");
+const Conversation = require("./Conversation");
 const Like = require("./Like");
 const Comment = require("./Comment");
 const Notification = require("./Notification");
@@ -23,6 +24,7 @@ const models = {
   Job,
   Application,
   Message,
+  Conversation, // Make sure this is here
   Like,
   Comment,
   Notification,
@@ -42,7 +44,7 @@ const defineAssociations = () => {
   models.User.hasMany(models.Job, { foreignKey: "hirerId", as: "hiredJobs" });
   models.User.hasMany(models.Application, {
     foreignKey: "photographerId",
-    as: "oldApplications", // Unique alias
+    as: "oldApplications",
   });
   models.User.hasMany(models.Like, { foreignKey: "userId", as: "userLikes" });
   models.User.hasMany(models.Comment, {
@@ -55,7 +57,27 @@ const defineAssociations = () => {
   });
   models.User.hasMany(models.JobApplication, {
     foreignKey: "applicantId",
-    as: "userJobApplications", // Unique alias
+    as: "userJobApplications",
+  });
+
+  // Message associations for User
+  models.User.hasMany(models.Message, {
+    foreignKey: "senderId",
+    as: "sentMessages",
+  });
+  models.User.hasMany(models.Message, {
+    foreignKey: "receiverId",
+    as: "receivedMessages",
+  });
+
+  // Conversation associations for User
+  models.User.hasMany(models.Conversation, {
+    foreignKey: "user1Id",
+    as: "conversations1",
+  });
+  models.User.hasMany(models.Conversation, {
+    foreignKey: "user2Id",
+    as: "conversations2",
   });
 
   // Post associations - all unique aliases
@@ -80,7 +102,7 @@ const defineAssociations = () => {
   });
   models.Post.hasMany(models.JobApplication, {
     foreignKey: "postId",
-    as: "postJobApplications", // Unique alias
+    as: "postJobApplications",
   });
 
   // Photo associations
@@ -125,16 +147,6 @@ const defineAssociations = () => {
     as: "applicationResume",
   });
 
-  // Message associations
-  models.Message.belongsTo(models.User, {
-    foreignKey: "senderId",
-    as: "messageSender",
-  });
-  models.Message.belongsTo(models.User, {
-    foreignKey: "receiverId",
-    as: "messageReceiver",
-  });
-
   // Like associations
   models.Like.belongsTo(models.User, { foreignKey: "userId", as: "likeUser" });
   models.Like.belongsTo(models.Post, { foreignKey: "postId", as: "likedPost" });
@@ -169,6 +181,42 @@ const defineAssociations = () => {
   models.StockPhoto.hasMany(models.Photo, {
     foreignKey: "stockPhotoId",
     as: "stockPhotoUsages",
+  });
+
+  // Message associations
+  models.Message.belongsTo(models.User, {
+    foreignKey: "senderId",
+    as: "sender",
+  });
+  models.Message.belongsTo(models.User, {
+    foreignKey: "receiverId",
+    as: "receiver",
+  });
+  models.Message.belongsTo(models.Message, {
+    foreignKey: "replyToId",
+    as: "replyTo",
+  });
+  models.Message.belongsTo(models.Conversation, {
+    foreignKey: "conversationId",
+    as: "conversation",
+  });
+
+  // Conversation associations
+  models.Conversation.belongsTo(models.User, {
+    foreignKey: "user1Id",
+    as: "user1",
+  });
+  models.Conversation.belongsTo(models.User, {
+    foreignKey: "user2Id",
+    as: "user2",
+  });
+  models.Conversation.belongsTo(models.Message, {
+    foreignKey: "lastMessageId",
+    as: "lastMessage",
+  });
+  models.Conversation.hasMany(models.Message, {
+    foreignKey: "conversationId",
+    as: "messages",
   });
 };
 

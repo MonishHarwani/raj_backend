@@ -271,7 +271,7 @@ router.post(
           errors: errors.array(),
         });
       }
-
+      console.log("No Error till here");
       const {
         title,
         description,
@@ -320,6 +320,8 @@ router.post(
       const isJobPostBool = isJobPost === "true" || isJobPost === true;
       const budgetNum = budget && budget !== "" ? parseFloat(budget) : null;
 
+      console.log("jOb Post Bool ", isJobPostBool);
+      console.log("bNum ", budgetNum);
       // Create post
       const post = await Post.create({
         userId: req.user.id,
@@ -382,13 +384,13 @@ router.post(
         include: [
           {
             model: User,
-            as: "user",
+            as: "postAuthor",
             attributes: ["id", "firstName", "lastName", "profilePhoto", "role"],
           },
           {
             model: Photo,
-            as: "photos",
-            order: [["order", "ASC"]],
+            as: "postPhotos",
+            // move ordering to top-level if not using separate
           },
         ],
       });
@@ -399,7 +401,7 @@ router.post(
       });
     } catch (error) {
       console.error("Create post error:", error);
-      res.status(500).json({ message: "Internal server error" });
+      res.status(500).json({ message: error });
     }
   }
 );

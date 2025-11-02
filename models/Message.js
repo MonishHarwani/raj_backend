@@ -30,9 +30,21 @@ Message.init(
       type: DataTypes.TEXT,
       allowNull: false,
     },
+    messageType: {
+      type: DataTypes.ENUM("text", "images", "files"),
+      defaultValue: "text",
+    },
+    fileUrl: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+    },
+    fileName: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
     chatId: {
-      type: DataTypes.STRING(100),
-      allowNull: false,
+      type: DataTypes.STRING(255),
+      allowNull: true,
     },
     isRead: {
       type: DataTypes.BOOLEAN,
@@ -41,6 +53,19 @@ Message.init(
     readAt: {
       type: DataTypes.DATE,
       allowNull: true,
+    },
+    replyToId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: "messages",
+        key: "id",
+      },
+    },
+    conversationId: {
+      type: DataTypes.STRING(100),
+      allowNull: false,
+      // This will be a combination of senderId-receiverId (smaller-larger)
     },
   },
   {
@@ -56,7 +81,10 @@ Message.init(
         fields: ["receiverId"],
       },
       {
-        fields: ["chatId"],
+        fields: ["conversationId"],
+      },
+      {
+        fields: ["isRead"],
       },
       {
         fields: ["createdAt"],
