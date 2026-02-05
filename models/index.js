@@ -152,10 +152,12 @@ const defineAssociations = () => {
   models.Like.belongsTo(models.Post, { foreignKey: "postId", as: "likedPost" });
 
   // Comment associations
+  // Comment associations (internal)
   models.Comment.belongsTo(models.User, {
     foreignKey: "userId",
     as: "commentUser",
   });
+
   models.Comment.belongsTo(models.Post, {
     foreignKey: "postId",
     as: "commentPost",

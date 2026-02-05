@@ -11,6 +11,7 @@ const {
 const { authenticateToken } = require("../middleware/auth");
 const { uploadPhoto } = require("../middleware/upload");
 const router = express.Router();
+const { normalizeComment, normalizePost } = require("../utils/normalize");
 
 // Get all posts
 router.get("/", authenticateToken, async (req, res) => {
@@ -115,51 +116,31 @@ router.get("/", authenticateToken, async (req, res) => {
 });
 
 // Get single post
-router.get("/:id", authenticateToken, async (req, res) => {
-  try {
-    const currentUserId = req.user?.id;
+const optionalAuthenticateToken = require("../middleware/optionalAuth");
 
+router.get("/:id", optionalAuthenticateToken, async (req, res) => {
+  try {
     const post = await Post.findByPk(req.params.id, {
       include: [
         {
           model: User,
-          as: "postAuthor", // Use the updated alias
-          attributes: [
-            "id",
-            "firstName",
-            "lastName",
-            "profilePhoto",
-            "role",
-            "bio",
-          ],
+          as: "postAuthor",
+          attributes: ["id", "firstName", "lastName", "profilePhoto"],
         },
         {
           model: Photo,
-          as: "postPhotos", // Use the updated alias
-          order: [["order", "ASC"]],
-        },
-        {
-          model: Like,
-          as: "postLikes", // Use the updated alias
-          include: [
-            {
-              model: User,
-              as: "likeUser", // Use the updated alias
-              attributes: ["id", "firstName", "lastName", "profilePhoto"],
-            },
-          ],
+          as: "postPhotos", // 👈 REQUIRED
         },
         {
           model: Comment,
-          as: "postComments", // Use the updated alias
+          as: "postComments",
           include: [
             {
               model: User,
-              as: "commentUser", // Use the updated alias
+              as: "commentUser",
               attributes: ["id", "firstName", "lastName", "profilePhoto"],
             },
           ],
-          order: [["createdAt", "DESC"]],
         },
       ],
     });
@@ -168,28 +149,24 @@ router.get("/:id", authenticateToken, async (req, res) => {
       return res.status(404).json({ message: "Post not found" });
     }
 
-    const postData = post.toJSON();
+    let isLikedByCurrentUser = false;
 
-    // Map back to expected property names
-    const postWithLikeInfo = {
-      ...postData,
-      user: postData.postAuthor,
-      photos: postData.postPhotos,
-      likes: postData.postLikes,
-      comments: postData.postComments?.map((comment) => ({
-        ...comment,
-        user: comment.commentUser,
-      })),
-      likesCount: postData.postLikes ? postData.postLikes.length : 0,
-      commentsCount: postData.postComments ? postData.postComments.length : 0,
-      isLikedByCurrentUser: currentUserId
-        ? postData.postLikes?.some((like) => like.userId === currentUserId)
-        : false,
-    };
+    if (req.user) {
+      const existingLike = await Like.findOne({
+        where: {
+          userId: req.user.id,
+          postId: post.id,
+        },
+      });
 
-    res.json({ post: postWithLikeInfo });
-  } catch (error) {
-    console.error("Get post error:", error);
+      isLikedByCurrentUser = !!existingLike;
+    }
+
+    res.json({
+      post: normalizePost(post.toJSON(), { isLikedByCurrentUser }),
+    });
+  } catch (err) {
+    console.error("Get post error:", err);
     res.status(500).json({ message: "Internal server error" });
   }
 });
@@ -370,7 +347,7 @@ router.post(
               stockPhotoId: stockPhotoId,
             });
           }
-        }
+        },
       );
 
       const allPhotoPromises = [
@@ -403,7 +380,7 @@ router.post(
       console.error("Create post error:", error);
       res.status(500).json({ message: error });
     }
-  }
+  },
 );
 
 // Update post
@@ -461,7 +438,7 @@ router.put(
       console.error("Update post error:", error);
       res.status(500).json({ message: "Internal server error" });
     }
-  }
+  },
 );
 
 // Delete post
@@ -499,14 +476,26 @@ router.post("/:id/like", authenticateToken, async (req, res) => {
     if (existingLike) {
       await existingLike.destroy();
       await post.decrement("likesCount");
-      res.json({ message: "Post unliked", liked: false });
+      await post.reload(); // 🔥 get updated value
+
+      return res.json({
+        message: "Post unliked",
+        isLiked: false,
+        likesCount: post.likesCount,
+      });
     } else {
       await Like.create({
         userId: req.user.id,
         postId: post.id,
       });
       await post.increment("likesCount");
-      res.json({ message: "Post liked", liked: true });
+      await post.reload(); // 🔥 get updated value
+
+      return res.json({
+        message: "Post liked",
+        isLiked: true,
+        likesCount: post.likesCount,
+      });
     }
   } catch (error) {
     console.error("Like post error:", error);
@@ -514,60 +503,108 @@ router.post("/:id/like", authenticateToken, async (req, res) => {
   }
 });
 
-// Add comment
-router.post(
-  "/:id/comments",
+// Add Comment
+router.post("/:id/comments", authenticateToken, async (req, res) => {
+  try {
+    const comment = await Comment.create({
+      userId: req.user.id,
+      postId: req.params.id,
+      content: req.body.content,
+      parentId: req.body.parentId || null,
+    });
+
+    const fullComment = await Comment.findByPk(comment.id, {
+      include: [
+        {
+          model: User,
+          as: "commentUser",
+          attributes: ["id", "firstName", "lastName", "profilePhoto"],
+        },
+      ],
+    });
+
+    return res.status(201).json({
+      message: "Comment added successfully",
+      comment: normalizeComment(fullComment), // 🔥 normalized
+    });
+  } catch (err) {
+    console.error("Add comment error:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+// Edit Comment
+router.put(
+  "/comments/:id",
   authenticateToken,
   [
     body("content")
       .trim()
       .isLength({ min: 1, max: 500 })
-      .withMessage(
-        "Comment content is required and must be less than 500 characters"
-      ),
+      .withMessage("Comment must be between 1 and 500 characters"),
   ],
   async (req, res) => {
     try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
-      }
-
-      const post = await Post.findByPk(req.params.id);
-      if (!post) {
-        return res.status(404).json({ message: "Post not found" });
-      }
-
-      const { content, parentId } = req.body;
-
-      const comment = await Comment.create({
-        userId: req.user.id,
-        postId: post.id,
-        content,
-        parentId: parentId || null,
-      });
-
-      await post.increment("commentsCount");
-
-      const commentWithUser = await Comment.findByPk(comment.id, {
+      const comment = await Comment.findByPk(req.params.id, {
         include: [
           {
             model: User,
-            as: "user",
+            as: "commentUser",
             attributes: ["id", "firstName", "lastName", "profilePhoto"],
           },
         ],
       });
 
-      res.status(201).json({
-        message: "Comment added successfully",
-        comment: commentWithUser,
+      if (!comment) {
+        return res.status(404).json({ message: "Comment not found" });
+      }
+
+      if (comment.userId !== req.user.id) {
+        return res.status(403).json({ message: "Not allowed" });
+      }
+
+      comment.content = req.body.content.trim();
+      await comment.save();
+
+      res.json({
+        message: "Comment updated",
+        comment: normalizeComment(comment),
       });
-    } catch (error) {
-      console.error("Add comment error:", error);
+    } catch (err) {
+      console.error("Edit comment error:", err);
       res.status(500).json({ message: "Internal server error" });
     }
-  }
+  },
 );
+
+// DELETE COMMENT
+router.delete("/comments/:id", authenticateToken, async (req, res) => {
+  try {
+    const comment = await Comment.findByPk(req.params.id);
+
+    if (!comment) {
+      return res.status(404).json({ message: "Comment not found" });
+    }
+
+    if (comment.userId !== req.user.id) {
+      return res.status(403).json({ message: "Not allowed" });
+    }
+
+    await comment.destroy();
+
+    // Optional: decrement commentsCount
+    await Post.increment("commentsCount", {
+      by: -1,
+      where: { id: comment.postId },
+    });
+
+    res.json({
+      message: "Comment deleted",
+      commentId: comment.id,
+    });
+  } catch (err) {
+    console.error("Delete comment error:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
 
 module.exports = router;
