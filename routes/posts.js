@@ -522,7 +522,10 @@ router.post("/:id/comments", authenticateToken, async (req, res) => {
         },
       ],
     });
-
+    await Post.increment("commentsCount", {
+      by: 1,
+      where: { id: req.params.id },
+    });
     return res.status(201).json({
       message: "Comment added successfully",
       comment: normalizeComment(fullComment), // 🔥 normalized
@@ -585,16 +588,19 @@ router.delete("/comments/:id", authenticateToken, async (req, res) => {
       return res.status(404).json({ message: "Comment not found" });
     }
 
+    // Authorisation
     if (comment.userId !== req.user.id) {
       return res.status(403).json({ message: "Not allowed" });
     }
 
+    const postId = comment.postId; // ✅ correct source
+
     await comment.destroy();
 
-    // Optional: decrement commentsCount
+    // ✅ decrement cached count
     await Post.increment("commentsCount", {
       by: -1,
-      where: { id: comment.postId },
+      where: { id: postId },
     });
 
     res.json({
